@@ -4,6 +4,7 @@ import '../presentation/screens/access/company_access_screen.dart';
 import '../presentation/screens/home/home_screen.dart';
 import '../presentation/screens/highlighter/document_highlighter_screen.dart';
 import '../presentation/screens/highlighter/document_editor_screen.dart';
+import '../presentation/screens/template/template_fill_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -18,6 +19,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/editor',
         builder: (_, __) => const DocumentEditorScreen(),
+      ),
+      GoRoute(
+        path: '/fill',
+        builder: (_, __) => const TemplateFillScreen(),
       ),
     ],
   );

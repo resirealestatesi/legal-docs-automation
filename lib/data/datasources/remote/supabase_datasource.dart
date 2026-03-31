@@ -66,6 +66,35 @@ class SupabaseDatasource {
     }
   }
 
+  Future<void> updateTemplate({
+    required String id,
+    required String name,
+    String? description,
+  }) async {
+    try {
+      await _client.from(SupabaseConfig.templatesTable).update({
+        'name': name,
+        'description': description,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', id);
+    } catch (e) {
+      throw ServerException(message: 'Error updating template: $e');
+    }
+  }
+
+  Future<void> deleteTemplate(String id) async {
+    try {
+      await _client
+          .from(SupabaseConfig.automationsTable)
+          .delete()
+          .eq('template_id', id);
+
+      await _client.from(SupabaseConfig.templatesTable).delete().eq('id', id);
+    } catch (e) {
+      throw ServerException(message: 'Error deleting template: $e');
+    }
+  }
+
   // ==================== AUTOMATIONS ====================
 
   Future<List<Map<String, dynamic>>> getAutomationsByTemplateIds(
@@ -78,6 +107,22 @@ class SupabaseDatasource {
           .from(SupabaseConfig.automationsTable)
           .select()
           .inFilter('template_id', templateIds);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      throw ServerException(message: 'Error fetching automations: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAutomationsByTemplateId(
+    String templateId,
+  ) async {
+    try {
+      final response = await _client
+          .from(SupabaseConfig.automationsTable)
+          .select()
+          .eq('template_id', templateId)
+          .order('created_at');
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
@@ -115,6 +160,63 @@ class SupabaseDatasource {
     }
   }
 
+  Future<void> updateAutomation({
+    required String id,
+    required String fieldName,
+    required String highlightText,
+    List<String> fieldOptions = const [],
+  }) async {
+    try {
+      await _client.from(SupabaseConfig.automationsTable).update({
+        'field_name': fieldName,
+        'highlight_text': highlightText,
+        'field_options': fieldOptions,
+      }).eq('id', id);
+    } catch (e) {
+      throw ServerException(message: 'Error updating automation: $e');
+    }
+  }
+
+  Future<void> deleteAutomation(String id) async {
+    try {
+      await _client.from(SupabaseConfig.automationsTable).delete().eq('id', id);
+    } catch (e) {
+      throw ServerException(message: 'Error deleting automation: $e');
+    }
+  }
+
+  // ==================== TEMPLATE VALUES ====================
+
+  Future<void> saveTemplateValues(
+    List<Map<String, String>> values,
+  ) async {
+    try {
+      for (final v in values) {
+        await _client.from('template_values').upsert({
+          'automation_id': v['automation_id'],
+          'filled_value': v['value'],
+        });
+      }
+    } catch (e) {
+      throw ServerException(message: 'Error saving template values: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getTemplateValues(
+    String automationId,
+  ) async {
+    try {
+      final response = await _client
+          .from('template_values')
+          .select()
+          .eq('automation_id', automationId);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      throw ServerException(message: 'Error fetching template values: $e');
+    }
+  }
+
   // ==================== SYNC ====================
 
   Future<List<Map<String, dynamic>>> getAutomationsUpdatedAfter(
@@ -128,7 +230,9 @@ class SupabaseDatasource {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      throw ServerException(message: 'Error fetching updated automations: $e');
+      throw ServerException(
+        message: 'Error fetching updated automations: $e',
+      );
     }
   }
 }

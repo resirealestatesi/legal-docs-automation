@@ -1,8 +1,12 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../config/theme/app_colors.dart';
 import '../../../config/supabase_config.dart';
 import '../../providers/company_provider.dart';
@@ -29,10 +33,18 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  String? _companyId;
+
   @override
   void initState() {
     super.initState();
-    _syncOnStart();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final company = ref.read(currentCompanyProvider).value;
+      if (company != null) {
+        setState(() => _companyId = company.id);
+        _syncOnStart();
+      }
+    });
   }
 
   Future<void> _syncOnStart() async {
@@ -53,7 +65,222 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     if (result != null && result.files.single.path != null) {
       await context.push('/highlight', extra: result.files.single);
-      if (mounted) ref.invalidate(templatesProvider);
+      if (mounted && _companyId != null) {
+        ref.invalidate(templatesProvider(_companyId!));
+      }
+    }
+  }
+
+  Future<void> _deleteTemplate(String templateId, String name) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        title: const Text('Eliminar plantilla'),
+        content: Text(
+          '¿Eliminar "$name"? Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+            ),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && _companyId != null) {
+      try {
+        final supabase = Supabase.instance.client;
+        await supabase
+            .from(SupabaseConfig.automationsTable)
+            .delete()
+            .eq('template_id', templateId);
+        await supabase
+            .from(SupabaseConfig.templatesTable)
+            .delete()
+            .eq('id', templateId);
+
+        ref.invalidate(templatesProvider(_companyId!));
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Plantilla eliminada')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _editTemplate(Map<String, dynamic> template) async {
+    final nameController = TextEditingController(text: template['name']);
+    final descController =
+        TextEditingController(text: template['description'] ?? '');
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        title: const Text('Editar Plantilla'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Nombre',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: descController,
+              decoration: const InputDecoration(
+                labelText: 'Descripción',
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && _companyId != null) {
+      try {
+        final supabase = Supabase.instance.client;
+        await supabase.from(SupabaseConfig.templatesTable).update({
+          'name': nameController.text.trim(),
+          'description': descController.text.trim(),
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', template['id']);
+
+        ref.invalidate(templatesProvider(_companyId!));
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Plantilla actualizada')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _shareTemplate(Map<String, dynamic> template) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final automations = await supabase
+          .from(SupabaseConfig.automationsTable)
+          .select()
+          .eq('template_id', template['id']);
+
+      final exportData = {
+        'template': template,
+        'automations': automations,
+        'exported_at': DateTime.now().toIso8601String(),
+      };
+
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/${template['name'] ?? 'plantilla'}.json');
+      await file.writeAsString(jsonEncode(exportData));
+
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path)]),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al compartir: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _importTemplate() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+
+      if (result == null || result.files.single.path == null) return;
+
+      final file = File(result.files.single.path!);
+      final content = await file.readAsString();
+      final data = jsonDecode(content) as Map<String, dynamic>;
+
+      final templateData = data['template'] as Map<String, dynamic>;
+      final automationsData = data['automations'] as List<dynamic>;
+
+      final company = ref.read(currentCompanyProvider).value;
+      if (company == null) return;
+
+      final supabase = Supabase.instance.client;
+
+      final newTemplate = await supabase
+          .from(SupabaseConfig.templatesTable)
+          .insert({
+            'company_id': company.id,
+            'name': '${templateData['name']} (importada)',
+            'description': templateData['description'],
+          })
+          .select()
+          .single();
+
+      for (final auto in automationsData) {
+        await supabase.from(SupabaseConfig.automationsTable).insert({
+          'template_id': newTemplate['id'],
+          'field_name': auto['field_name'],
+          'highlight_text': auto['highlight_text'],
+          'highlight_color': auto['highlight_color'],
+          'field_options': auto['field_options'],
+        });
+      }
+
+      ref.invalidate(templatesProvider(company.id));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Plantilla importada exitosamente')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al importar: $e')),
+        );
+      }
     }
   }
 
@@ -126,8 +353,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   const SizedBox(height: 12),
                   _ActionCard(
+                    icon: Icons.upload_rounded,
+                    title: 'Importar Plantilla',
+                    subtitle: 'Cargar plantilla desde archivo JSON',
+                    onTap: _importTemplate,
+                  ),
+                  const SizedBox(height: 12),
+                  _ActionCard(
                     icon: Icons.sync_rounded,
-                    title: 'Sincronizar Plantillas',
+                    title: 'Sincronizar',
                     subtitle: 'Descargar últimas plantillas de Supabase',
                     onTap: () async {
                       try {
@@ -136,8 +370,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Sincronización completada'),
-                            ),
+                                content: Text('Sincronización completada')),
                           );
                         }
                       } catch (e) {
@@ -154,7 +387,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 16),
-                  _TemplatesList(companyId: company.id),
+                  _TemplatesList(
+                    companyId: company.id,
+                    onEdit: _editTemplate,
+                    onDelete: _deleteTemplate,
+                    onShare: _shareTemplate,
+                    onFill: (template) {
+                      context.push('/fill', extra: template);
+                    },
+                  ),
                 ],
               ),
             ),
@@ -164,8 +405,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
 class _TemplatesList extends ConsumerWidget {
   final String companyId;
+  final Function(Map<String, dynamic>) onEdit;
+  final Function(String, String) onDelete;
+  final Function(Map<String, dynamic>) onShare;
+  final Function(Map<String, dynamic>) onFill;
 
-  const _TemplatesList({required this.companyId});
+  const _TemplatesList({
+    required this.companyId,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onShare,
+    required this.onFill,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -227,15 +478,76 @@ class _TemplatesList extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.download_rounded),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Función de descarga próximamente'),
-                      ),
-                    );
+                onTap: () => onFill(template),
+                trailing: PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert,
+                      color: AppColors.textSecondary),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'fill':
+                        onFill(template);
+                        break;
+                      case 'edit':
+                        onEdit(template);
+                        break;
+                      case 'share':
+                        onShare(template);
+                        break;
+                      case 'delete':
+                        onDelete(template['id'], template['name'] ?? '');
+                        break;
+                    }
                   },
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem(
+                      value: 'fill',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_note,
+                              color: AppColors.primary, size: 20),
+                          SizedBox(width: 8),
+                          Text('Llenar campos'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined,
+                              color: AppColors.accent, size: 20),
+                          SizedBox(width: 8),
+                          Text('Editar'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'share',
+                      child: Row(
+                        children: [
+                          Icon(Icons.share_outlined,
+                              color: AppColors.textSecondary, size: 20),
+                          SizedBox(width: 8),
+                          Text('Compartir'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline,
+                              color: AppColors.error, size: 20),
+                          SizedBox(width: 8),
+                          Text('Eliminar',
+                              style: TextStyle(color: AppColors.error)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             );

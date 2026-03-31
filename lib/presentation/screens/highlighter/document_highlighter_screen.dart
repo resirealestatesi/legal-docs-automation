@@ -13,6 +13,17 @@ import '../../providers/company_provider.dart';
 import '../../widgets/common/app_button.dart';
 import '../../widgets/common/app_text_field.dart';
 
+const _fieldCategories = [
+  'Fecha',
+  'Monto',
+  'Nombre',
+  'Dirección',
+  'Empresa',
+  'Documento',
+  'Firma',
+  'Otro',
+];
+
 class DocumentHighlighterScreen extends ConsumerStatefulWidget {
   const DocumentHighlighterScreen({super.key});
 
@@ -29,7 +40,6 @@ class _DocumentHighlighterScreenState
   final _templateId = const Uuid().v4();
   bool _isLoading = true;
   bool _fileLoaded = false;
-  TextSelection? _currentSelection;
   final _textController = TextEditingController();
 
   @override
@@ -90,21 +100,6 @@ class _DocumentHighlighterScreenState
     }
   }
 
-  void _onSelectionComplete() {
-    final selection = _currentSelection;
-    if (selection != null && !selection.isCollapsed) {
-      final text = selection.textInside(_documentText);
-      if (text.trim().isNotEmpty) {
-        _showHighlightDialog(
-          text,
-          selection.start,
-          selection.end,
-        );
-      }
-    }
-    setState(() => _currentSelection = null);
-  }
-
   Future<void> _saveTemplate() async {
     final company = ref.read(currentCompanyProvider).value;
     if (company == null) return;
@@ -157,8 +152,9 @@ class _DocumentHighlighterScreenState
     }
   }
 
-  void _showHighlightDialog(String selectedText, int start, int end) {
+  void _showAssignDialog(String selectedText, int start, int end) {
     final nameController = TextEditingController();
+    String category = _fieldCategories.first;
     final List<String> options = [];
     final optionController = TextEditingController();
 
@@ -169,13 +165,20 @@ class _DocumentHighlighterScreenState
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          title: const Text('Asignar Campo'),
+          title: Row(
+            children: [
+              Icon(Icons.highlight_alt, color: AppColors.accent, size: 20),
+              const SizedBox(width: 8),
+              const Text('Asignar Campo', style: TextStyle(fontSize: 18)),
+            ],
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
+                  width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: AppColors.highlight,
@@ -186,31 +189,42 @@ class _DocumentHighlighterScreenState
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontStyle: FontStyle.italic,
+                      fontSize: 14,
                     ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: category,
+                  decoration: const InputDecoration(
+                    labelText: 'Categoría',
+                    prefixIcon: Icon(Icons.category_outlined),
+                  ),
+                  items: _fieldCategories
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setDialogState(() => category = val);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
                 AppTextField(
                   controller: nameController,
                   labelText: 'Nombre del campo',
                   hintText: 'Ej: Fecha de Contrato',
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Opciones (Dropdown):',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(
-                      child: AppTextField(
-                        controller: optionController,
-                        hintText: 'Agregar opción',
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline),
+                    const Text('Opciones:',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w500, fontSize: 13)),
+                    const Spacer(),
+                    TextButton.icon(
                       onPressed: () {
                         if (optionController.text.trim().isNotEmpty) {
                           setDialogState(() {
@@ -219,25 +233,42 @@ class _DocumentHighlighterScreenState
                           });
                         }
                       },
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Agregar'),
                     ),
                   ],
                 ),
-                ...options.map(
-                  (o) => ListTile(
-                    dense: true,
-                    title: Text(o),
-                    trailing: IconButton(
-                      icon: const Icon(
-                        Icons.remove_circle_outline,
-                        color: AppColors.error,
-                        size: 20,
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppTextField(
+                        controller: optionController,
+                        hintText: 'Escribe opción y presiona Agregar',
                       ),
-                      onPressed: () {
-                        setDialogState(() => options.remove(o));
-                      },
+                    ),
+                  ],
+                ),
+                if (options.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: options
+                          .map(
+                            (o) => Chip(
+                              label:
+                                  Text(o, style: const TextStyle(fontSize: 12)),
+                              deleteIcon: const Icon(Icons.close, size: 16),
+                              onDeleted: () {
+                                setDialogState(() => options.remove(o));
+                              },
+                              backgroundColor: AppColors.highlight,
+                            ),
+                          )
+                          .toList(),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -246,12 +277,12 @@ class _DocumentHighlighterScreenState
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Cancelar'),
             ),
-            ElevatedButton(
+            ElevatedButton.icon(
               onPressed: () {
                 if (nameController.text.trim().isNotEmpty) {
                   final highlight = HighlightSelection(
                     templateId: _templateId,
-                    fieldName: nameController.text.trim(),
+                    fieldName: '[$category] ${nameController.text.trim()}',
                     highlightText: selectedText,
                     startOffset: start,
                     endOffset: end,
@@ -267,7 +298,8 @@ class _DocumentHighlighterScreenState
                   Navigator.pop(ctx);
                 }
               },
-              child: const Text('Guardar'),
+              icon: const Icon(Icons.check, size: 18),
+              label: const Text('Asignar'),
             ),
           ],
         ),
@@ -285,18 +317,61 @@ class _DocumentHighlighterScreenState
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'Selecciona texto en el documento para resaltarlo',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  color: AppColors.primary.withValues(alpha: 0.05),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline,
+                          size: 18, color: AppColors.textSecondary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Selecciona texto y presiona "Asignar"',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: AppColors.textSecondary),
                         ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          final selection = _textController.selection;
+                          if (!selection.isCollapsed) {
+                            final text = selection.textInside(_documentText);
+                            if (text.trim().isNotEmpty) {
+                              _showAssignDialog(
+                                text,
+                                selection.start,
+                                selection.end,
+                              );
+                            }
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Selecciona texto primero'),
+                                duration: Duration(seconds: 1),
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.highlight_alt, size: 18),
+                        label: const Text('Asignar'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.accent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          minimumSize: const Size(0, 0),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Expanded(
                   child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    margin: const EdgeInsets.all(16),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: AppColors.surface,
@@ -319,87 +394,95 @@ class _DocumentHighlighterScreenState
                         focusedBorder: InputBorder.none,
                         contentPadding: EdgeInsets.zero,
                       ),
-                      onTap: () {
-                        _currentSelection = _textController.selection;
-                        if (_currentSelection != null &&
-                            !_currentSelection!.isCollapsed) {
-                          _onSelectionComplete();
-                        }
-                      },
                     ),
                   ),
                 ),
-                if (_highlights.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                if (_highlights.isNotEmpty) ...[
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
                       children: [
                         Text(
-                          'Campos resaltados (${_highlights.length})',
+                          'Campos (${_highlights.length})',
                           style: Theme.of(context).textTheme.titleSmall,
                         ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          height: 60,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _highlights.length,
-                            itemBuilder: (ctx, i) {
-                              final h = _highlights[i];
-                              return Container(
-                                margin: const EdgeInsets.only(right: 8),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                constraints: const BoxConstraints(
-                                  maxWidth: 200,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.highlight,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: AppColors.accent.withValues(
-                                      alpha: 0.3,
-                                    ),
-                                  ),
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        h.fieldName,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 12,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 1,
-                                      ),
-                                    ),
-                                    Flexible(
-                                      child: Text(
-                                        h.highlightText,
-                                        style: const TextStyle(
-                                          fontSize: 10,
-                                          color: AppColors.textSecondary,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 1,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () {
+                            setState(() => _highlights.clear());
+                          },
+                          child: const Text('Limpiar todo',
+                              style: TextStyle(
+                                  color: AppColors.error, fontSize: 12)),
                         ),
                       ],
                     ),
                   ),
+                  SizedBox(
+                    height: 80,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      itemCount: _highlights.length,
+                      itemBuilder: (ctx, i) {
+                        final h = _highlights[i];
+                        return Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          constraints: const BoxConstraints(maxWidth: 180),
+                          decoration: BoxDecoration(
+                            color: AppColors.highlight,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: AppColors.accent.withValues(alpha: 0.3)),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      h.fieldName,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () {
+                                      setState(() => _highlights.removeAt(i));
+                                    },
+                                    child: const Padding(
+                                      padding: EdgeInsets.only(left: 4),
+                                      child: Icon(Icons.close,
+                                          size: 14, color: AppColors.error),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '"${h.highlightText}"',
+                                style: const TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.textSecondary),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: AppButton(
