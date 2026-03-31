@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:docx_creator/docx_creator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import '../../../config/theme/app_colors.dart';
 import '../../../domain/entities/highlight_selection.dart';
@@ -24,13 +25,17 @@ class _DocumentHighlighterScreenState
   final List<HighlightSelection> _highlights = [];
   final _templateId = const Uuid().v4();
   bool _isLoading = true;
+  bool _fileLoaded = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final file = ModalRoute.of(context)?.settings.arguments as PlatformFile?;
-    if (file != null && _documentText.isEmpty) {
-      _loadDocument(file);
+    if (!_fileLoaded) {
+      final file = GoRouterState.of(context).extra as PlatformFile?;
+      if (file != null) {
+        _fileLoaded = true;
+        _loadDocument(file);
+      }
     }
   }
 
@@ -227,8 +232,7 @@ class _DocumentHighlighterScreenState
                         color: AppColors.onSurface,
                       ),
                       onSelectionChanged: (selection, cause) {
-                        if (cause == SelectionChangedCause.longPress ||
-                            cause == SelectionChangedCause.tap) {
+                        if (cause == SelectionChangedCause.tap) {
                           final text = selection.textInside(_documentText);
                           if (text.trim().isNotEmpty) {
                             _showHighlightDialog(
