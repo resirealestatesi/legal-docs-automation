@@ -2,10 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../config/theme/app_colors.dart';
+import '../../../config/supabase_config.dart';
 import '../../providers/company_provider.dart';
 import '../../providers/sync_provider.dart';
 import '../../widgets/common/loading_indicator.dart';
+
+final templatesProvider =
+    FutureProvider.family<List<Map<String, dynamic>>, String>(
+        (ref, companyId) async {
+  final supabase = Supabase.instance.client;
+  final response = await supabase
+      .from(SupabaseConfig.templatesTable)
+      .select()
+      .eq('company_id', companyId)
+      .order('created_at', ascending: false);
+  return List<Map<String, dynamic>>.from(response);
+});
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -38,7 +52,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
 
     if (result != null && result.files.single.path != null) {
-      context.push('/highlight', extra: result.files.single);
+      await context.push('/highlight', extra: result.files.single);
+      if (mounted) ref.invalidate(templatesProvider);
     }
   }
 
@@ -62,7 +77,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       body: company == null
           ? const LoadingIndicator(message: 'Cargando...')
-          : Padding(
+          : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -83,9 +98,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               children: [
                                 Text(
                                   company.name,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleMedium,
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
                                 ),
                                 Text(
                                   'Código: ${company.code}',
@@ -118,6 +132,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     onTap: () async {
                       try {
                         await ref.read(syncProvider).syncForCompany(company.id);
+                        ref.invalidate(templatesProvider(company.id));
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -127,16 +142,106 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         }
                       } catch (e) {
                         if (context.mounted) {
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error: $e')));
                         }
                       }
                     },
                   ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Mis Plantillas',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 16),
+                  _TemplatesList(companyId: company.id),
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _TemplatesList extends ConsumerWidget {
+  final String companyId;
+
+  const _TemplatesList({required this.companyId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final templatesAsync = ref.watch(templatesProvider(companyId));
+
+    return templatesAsync.when(
+      loading: () => const LoadingIndicator(message: 'Cargando plantillas...'),
+      error: (error, _) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('Error: $error'),
+        ),
+      ),
+      data: (templates) {
+        if (templates.isEmpty) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.description_outlined,
+                        size: 48, color: AppColors.textSecondary),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No hay plantillas guardadas',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Carga un .docx y resalta campos para crear una',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        return Column(
+          children: templates.map((template) {
+            return Card(
+              child: ListTile(
+                leading: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.description, color: AppColors.accent),
+                ),
+                title: Text(template['name'] ?? 'Sin nombre'),
+                subtitle: Text(
+                  template['description'] ?? 'Sin descripción',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.download_rounded),
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Función de descarga próximamente'),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 }

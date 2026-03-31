@@ -3,10 +3,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:docx_creator/docx_creator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../../../config/theme/app_colors.dart';
+import '../../../data/datasources/remote/supabase_datasource.dart';
 import '../../../domain/entities/highlight_selection.dart';
 import '../../providers/highlight_provider.dart';
+import '../../providers/company_provider.dart';
 import '../../widgets/common/app_button.dart';
 import '../../widgets/common/app_text_field.dart';
 
@@ -26,6 +29,14 @@ class _DocumentHighlighterScreenState
   final _templateId = const Uuid().v4();
   bool _isLoading = true;
   bool _fileLoaded = false;
+  TextSelection? _currentSelection;
+  final _textController = TextEditingController();
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -62,6 +73,7 @@ class _DocumentHighlighterScreenState
 
         setState(() {
           _documentText = buffer.toString();
+          _textController.text = _documentText;
           _isLoading = false;
         });
       } else {
@@ -75,6 +87,73 @@ class _DocumentHighlighterScreenState
         _documentText = 'Error al leer el documento: $e';
         _isLoading = false;
       });
+    }
+  }
+
+  void _onSelectionComplete() {
+    final selection = _currentSelection;
+    if (selection != null && !selection.isCollapsed) {
+      final text = selection.textInside(_documentText);
+      if (text.trim().isNotEmpty) {
+        _showHighlightDialog(
+          text,
+          selection.start,
+          selection.end,
+        );
+      }
+    }
+    setState(() => _currentSelection = null);
+  }
+
+  Future<void> _saveTemplate() async {
+    final company = ref.read(currentCompanyProvider).value;
+    if (company == null) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final supabase = Supabase.instance.client;
+      final datasource = SupabaseDatasource(supabase);
+
+      final templateName = _fileName.replaceAll('.docx', '');
+
+      final template = await datasource.createTemplate(
+        companyId: company.id,
+        name: templateName,
+        description: 'Plantilla con ${_highlights.length} campos',
+      );
+
+      final templateId = template['id'] as String;
+
+      for (final highlight in _highlights) {
+        await datasource.createAutomation(
+          templateId: templateId,
+          fieldName: highlight.fieldName,
+          highlightText: highlight.highlightText,
+          fieldOptions: highlight.options,
+          positionStart: highlight.startOffset,
+          positionEnd: highlight.endOffset,
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Plantilla "$templateName" guardada con ${_highlights.length} campos',
+            ),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -224,23 +303,27 @@ class _DocumentHighlighterScreenState
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: AppColors.border),
                     ),
-                    child: SelectableText(
-                      _documentText,
+                    child: TextField(
+                      controller: _textController,
+                      readOnly: true,
+                      maxLines: null,
+                      expands: true,
                       style: const TextStyle(
                         fontSize: 16,
                         height: 1.6,
                         color: AppColors.onSurface,
                       ),
-                      onSelectionChanged: (selection, cause) {
-                        if (cause == SelectionChangedCause.tap) {
-                          final text = selection.textInside(_documentText);
-                          if (text.trim().isNotEmpty) {
-                            _showHighlightDialog(
-                              text,
-                              selection.start,
-                              selection.end,
-                            );
-                          }
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      onTap: () {
+                        _currentSelection = _textController.selection;
+                        if (_currentSelection != null &&
+                            !_currentSelection!.isCollapsed) {
+                          _onSelectionComplete();
                         }
                       },
                     ),
@@ -270,6 +353,9 @@ class _DocumentHighlighterScreenState
                                   horizontal: 12,
                                   vertical: 8,
                                 ),
+                                constraints: const BoxConstraints(
+                                  maxWidth: 200,
+                                ),
                                 decoration: BoxDecoration(
                                   color: AppColors.highlight,
                                   borderRadius: BorderRadius.circular(8),
@@ -283,20 +369,27 @@ class _DocumentHighlighterScreenState
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      h.fieldName,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 12,
+                                    Flexible(
+                                      child: Text(
+                                        h.fieldName,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
                                       ),
                                     ),
-                                    Text(
-                                      h.highlightText,
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        color: AppColors.textSecondary,
+                                    Flexible(
+                                      child: Text(
+                                        h.highlightText,
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
                                       ),
-                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
                                 ),
@@ -312,18 +405,8 @@ class _DocumentHighlighterScreenState
                   child: AppButton(
                     text: 'Guardar Plantilla',
                     icon: Icons.save_rounded,
-                    onPressed: _highlights.isEmpty
-                        ? null
-                        : () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Plantilla guardada exitosamente',
-                                ),
-                              ),
-                            );
-                            Navigator.pop(context);
-                          },
+                    onPressed:
+                        _highlights.isEmpty ? null : () => _saveTemplate(),
                   ),
                 ),
               ],
