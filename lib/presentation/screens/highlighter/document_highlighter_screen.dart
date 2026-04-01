@@ -557,9 +557,13 @@ class _DocumentHighlighterScreenState
                                 onPressed: () {
                                   final selection = _textController.selection;
                                   if (!selection.isCollapsed) {
-                                    final text = selection.textInside(_documentText);
-                                    if (text.trim().isNotEmpty) {
-                                      _showAssignDialog(text, selection.start, selection.end);
+                                    final safeStart = math.max(0, math.min(selection.start, _documentText.length));
+                                    final safeEnd = math.max(0, math.min(selection.end, _documentText.length));
+                                    if (safeStart < safeEnd) {
+                                      final text = _documentText.substring(safeStart, safeEnd);
+                                      if (text.trim().isNotEmpty) {
+                                        _showAssignDialog(text, safeStart, safeEnd);
+                                      }
                                     }
                                   } else {
                                      ScaffoldMessenger.of(context).showSnackBar(

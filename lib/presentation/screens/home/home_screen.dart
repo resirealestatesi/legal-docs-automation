@@ -755,7 +755,7 @@ class _TemplateOptionMenu extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       icon: const Icon(Icons.more_horiz_rounded, color: Colors.grey, size: 20),
       itemBuilder: (ctx) => [
-        const PopupMenuItem(value: 'config', child: Row(children: [Icon(Icons.tune_rounded, size: 18, color: Color(0xFF4B5563)), SizedBox(width: 12), Text('Configurar Automatización')])),
+        const PopupMenuItem(value: 'config', child: Row(children: [Icon(Icons.tune_rounded, size: 18, color: Color(0xFF4B5563)), SizedBox(width: 12), Text('Editar Plantilla')])),
         const PopupMenuItem(value: 'rename', child: Row(children: [Icon(Icons.edit_rounded, size: 18, color: Color(0xFF4B5563)), SizedBox(width: 12), Text('Renombrar')])),
         const PopupMenuItem(value: 'share', child: Row(children: [Icon(Icons.ios_share_rounded, size: 18, color: Color(0xFF4B5563)), SizedBox(width: 12), Text('Compartir')])),
         const PopupMenuDivider(),
