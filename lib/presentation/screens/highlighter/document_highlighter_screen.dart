@@ -468,7 +468,7 @@ class _DocumentHighlighterScreenState
       body: Column(
         children: [
           PremiumHeader(
-            title: 'Configurar Plantilla',
+            title: 'Editar Plantilla',
             subtitle: _fileName,
             showBackButton: true,
             actions: [
