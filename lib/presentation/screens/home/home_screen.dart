@@ -14,7 +14,9 @@ import '../../providers/sync_provider.dart';
 import '../../widgets/common/loading_indicator.dart';
 import '../../widgets/common/premium_card.dart';
 import '../../widgets/common/premium_header.dart';
+import '../../providers/update_provider.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 final templatesProvider =
     FutureProvider.family<List<Map<String, dynamic>>, String>(
@@ -278,7 +280,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-class _FunctionalTopbar extends StatelessWidget {
+class _FunctionalTopbar extends ConsumerWidget {
   final String companyName;
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
@@ -286,19 +288,51 @@ class _FunctionalTopbar extends StatelessWidget {
   const _FunctionalTopbar({required this.companyName, required this.controller, required this.onChanged});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final updateState = ref.watch(updateProvider);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(32, 24, 48, 24),
       child: Row(
         children: [
-          // Logo or Branding Placeholder
           const Icon(Icons.auto_awesome_mosaic_rounded, color: Color(0xFF6366F1), size: 28),
           const SizedBox(width: 16),
           Text('Dashboard', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: const Color(0xFF111827))),
+          
+          // Update Notifier
+          const SizedBox(width: 32),
+          updateState.when(
+            data: (info) => info.hasUpdate 
+              ? Tooltip(
+                  message: 'Nueva versión disponible: ${info.latestVersion}',
+                  child: InkWell(
+                    onTap: () => launchUrl(Uri.parse(info.updateUrl)),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.accent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.accent),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.system_update_alt_rounded, size: 16, color: AppColors.accent),
+                          SizedBox(width: 8),
+                          Text('Descargar ahora', style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              : const SizedBox.shrink(),
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+
           const Spacer(),
           Container(
             width: 400,
-            height: 44, // Fixed height for better alignment
+            height: 44, 
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
               color: const Color(0xFFF9FAFB),
@@ -665,7 +699,13 @@ class _DocumentRow extends StatelessWidget {
                 children: [
                   const Icon(Icons.description_rounded, color: Color(0xFF9095A0), size: 24),
                   const SizedBox(width: 16),
-                  Text(template['name'] ?? 'Innominado', style: AppTextStyles.bodySemiBold),
+                  Expanded(
+                    child: Text(
+                      template['name'] ?? 'Innominado', 
+                      style: AppTextStyles.bodySemiBold,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
             ),
