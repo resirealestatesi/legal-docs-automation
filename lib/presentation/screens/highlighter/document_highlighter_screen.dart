@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -149,12 +150,24 @@ class _DocumentHighlighterScreenState
       _processDocx(doc, bytes);
 
       for (final auto in automations) {
+        final highlightText = auto['highlight_text'] as String? ?? '';
+        
+        // Dynamically find the correct start and end offsets since the DOCX text
+        // might have shifted during previous placeholder replacements.
+        int dynStart = _documentText.indexOf(highlightText);
+        int dynEnd = dynStart >= 0 ? dynStart + highlightText.length : 0;
+
+        if (dynStart == -1) {
+          dynStart = auto['position_start'] ?? 0;
+          dynEnd = math.max(dynStart, auto['position_end'] ?? 0);
+        }
+
         _highlights.add(HighlightSelection(
           templateId: _existingTemplateId!,
           fieldName: auto['field_name'],
-          highlightText: auto['highlight_text'],
-          startOffset: auto['position_start'] ?? 0,
-          endOffset: auto['position_end'] ?? 0,
+          highlightText: highlightText,
+          startOffset: dynStart,
+          endOffset: dynEnd,
           colorHex: auto['highlight_color'] ?? '#B89B5E',
           options: (auto['field_options']?['options'] as List<dynamic>?)?.cast<String>() ?? [],
           uppercase: auto['uppercase'] == true,
@@ -649,9 +662,10 @@ class HighlightingTextController extends TextEditingController {
             fontWeight: FontWeight.bold,
           ),
         ));
+        lastOffset = math.max(lastOffset, hEnd);
+      } else {
+        lastOffset = math.max(lastOffset, hStart);
       }
-
-      lastOffset = hEnd;
     }
 
     if (lastOffset < text.length) {
