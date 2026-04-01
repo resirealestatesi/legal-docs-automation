@@ -555,19 +555,37 @@ class _DocumentHighlighterScreenState
                               const SizedBox(width: 16),
                               ElevatedButton.icon(
                                 onPressed: () {
+                                  print('DEBUG: Asignar pressed');
                                   final selection = _textController.selection;
+                                  print('DEBUG: Selection details -> start: ${selection.start}, end: ${selection.end}, isCollapsed: ${selection.isCollapsed}');
+                                  
                                   if (!selection.isCollapsed) {
-                                    final safeStart = math.max(0, math.min(selection.start, _documentText.length));
-                                    final safeEnd = math.max(0, math.min(selection.end, _documentText.length));
+                                    final safeStart = math.max(0, math.min(selection.start, _textController.text.length));
+                                    final safeEnd = math.max(0, math.min(selection.end, _textController.text.length));
+                                    print('DEBUG: Safe boundaries -> safeStart: $safeStart, safeEnd: $safeEnd');
+                                    
                                     if (safeStart < safeEnd) {
-                                      final text = _documentText.substring(safeStart, safeEnd);
+                                      final text = _textController.text.substring(safeStart, safeEnd);
+                                      print('DEBUG: Extracted text -> "$text"');
+                                      
                                       if (text.trim().isNotEmpty) {
-                                        _showAssignDialog(text, safeStart, safeEnd);
+                                        print('DEBUG: Opening dialog...');
+                                        try {
+                                          _showAssignDialog(text, safeStart, safeEnd);
+                                        } catch (e, stack) {
+                                          print('DEBUG: Error showing dialog -> $e');
+                                          print(stack);
+                                        }
+                                      } else {
+                                        print('DEBUG: Text was empty or whitespace only.');
                                       }
+                                    } else {
+                                      print('DEBUG: safeStart >= safeEnd, nothing to do.');
                                     }
                                   } else {
+                                     print('DEBUG: Selection was collapsed, showing snackbar.');
                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Selecciona texto primero')),
+                                        const SnackBar(content: Text('Selecciona texto primero', style: TextStyle(color: Colors.white))),
                                       );
                                   }
                                 },
