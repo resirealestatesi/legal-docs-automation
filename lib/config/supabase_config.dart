@@ -7,4 +7,6 @@ class SupabaseConfig {
   static const String companiesTable = 'companies';
   static const String templatesTable = 'templates';
   static const String automationsTable = 'automations';
+
+  static const String templatesBucket = 'templates-docx';
 }

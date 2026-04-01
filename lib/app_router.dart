@@ -5,11 +5,13 @@ import '../presentation/screens/home/home_screen.dart';
 import '../presentation/screens/highlighter/document_highlighter_screen.dart';
 import '../presentation/screens/highlighter/document_editor_screen.dart';
 import '../presentation/screens/template/template_fill_screen.dart';
+import '../presentation/screens/template/template_review_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/access',
     routes: [
+      GoRoute(path: '/', redirect: (_, __) => '/access'),
       GoRoute(path: '/access', builder: (_, __) => const CompanyAccessScreen()),
       GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
       GoRoute(
@@ -23,6 +25,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/fill',
         builder: (_, __) => const TemplateFillScreen(),
+      ),
+      GoRoute(
+        path: '/review',
+        builder: (_, __) => const TemplateReviewScreen(),
       ),
     ],
   );

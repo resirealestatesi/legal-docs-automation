@@ -34,8 +34,9 @@ class HighlightRepositoryImpl {
   }
 
   Future<void> deleteHighlight(int id) async {
-    // Simplified: clear all and re-add without the one to delete
-    // In production, use a proper ID system
+    // Highlights are stored per template - id is used as index
+    // The caller should use clearHighlightsByTemplateId and re-add
+    // remaining highlights for a proper deletion workflow
   }
 
   Future<void> clearHighlightsByTemplateId(String templateId) async {

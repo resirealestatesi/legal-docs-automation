@@ -11,8 +11,11 @@ class SyncNotifier {
 
   SyncNotifier(this._syncRepository);
 
-  Future<void> syncForCompany(String companyId) async {
-    await _syncRepository.pullFromSupabase(companyId);
+  /// Syncs all templates and automations for a company.
+  /// Returns the list of templates with their automations.
+  Future<List<Map<String, dynamic>>> syncForCompany(String companyId) async {
+    final templates = await _syncRepository.pullFromSupabase(companyId);
     await _syncRepository.pushToSupabase();
+    return templates;
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../config/supabase_config.dart';
 import '../../../core/errors/exceptions.dart';
@@ -70,13 +71,17 @@ class SupabaseDatasource {
     required String id,
     required String name,
     String? description,
+    String? fileUrl,
   }) async {
     try {
-      await _client.from(SupabaseConfig.templatesTable).update({
+      final updates = {
         'name': name,
         'description': description,
         'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', id);
+      };
+      if (fileUrl != null) updates['file_url'] = fileUrl;
+
+      await _client.from(SupabaseConfig.templatesTable).update(updates).eq('id', id);
     } catch (e) {
       throw ServerException(message: 'Error updating template: $e');
     }
@@ -136,6 +141,7 @@ class SupabaseDatasource {
     required String highlightText,
     String highlightColor = '#B89B5E4D',
     List<String> fieldOptions = const [],
+    bool uppercase = false,
     int? positionStart,
     int? positionEnd,
   }) async {
@@ -148,6 +154,7 @@ class SupabaseDatasource {
             'highlight_text': highlightText,
             'highlight_color': highlightColor,
             'field_options': fieldOptions,
+            'uppercase': uppercase,
             'position_start': positionStart,
             'position_end': positionEnd,
           })
@@ -182,6 +189,17 @@ class SupabaseDatasource {
       await _client.from(SupabaseConfig.automationsTable).delete().eq('id', id);
     } catch (e) {
       throw ServerException(message: 'Error deleting automation: $e');
+    }
+  }
+
+  Future<void> deleteAutomationsByTemplateId(String templateId) async {
+    try {
+      await _client
+          .from(SupabaseConfig.automationsTable)
+          .delete()
+          .eq('template_id', templateId);
+    } catch (e) {
+      throw ServerException(message: 'Error deleting automations: $e');
     }
   }
 
@@ -233,6 +251,54 @@ class SupabaseDatasource {
       throw ServerException(
         message: 'Error fetching updated automations: $e',
       );
+    }
+  }
+
+  // ==================== STORAGE ====================
+
+  /// Uploads a .docx file to Supabase Storage and returns the public path.
+  Future<String> uploadDocxFile({
+    required String templateId,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    try {
+      final storagePath = '$templateId/$fileName';
+      await _client.storage.from(SupabaseConfig.templatesBucket).uploadBinary(
+            storagePath,
+            fileBytes,
+            fileOptions: const FileOptions(
+              contentType:
+                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              upsert: true,
+            ),
+          );
+      return storagePath;
+    } catch (e) {
+      throw ServerException(message: 'Error uploading .docx file: $e');
+    }
+  }
+
+  /// Downloads a .docx file from Supabase Storage and returns its bytes.
+  Future<Uint8List> downloadDocxFile(String storagePath) async {
+    try {
+      final bytes = await _client.storage
+          .from(SupabaseConfig.templatesBucket)
+          .download(storagePath);
+      return bytes;
+    } catch (e) {
+      throw ServerException(message: 'Error downloading .docx file: $e');
+    }
+  }
+
+  /// Deletes the .docx file from Supabase Storage.
+  Future<void> deleteDocxFile(String storagePath) async {
+    try {
+      await _client.storage
+          .from(SupabaseConfig.templatesBucket)
+          .remove([storagePath]);
+    } catch (e) {
+      throw ServerException(message: 'Error deleting .docx file: $e');
     }
   }
 }

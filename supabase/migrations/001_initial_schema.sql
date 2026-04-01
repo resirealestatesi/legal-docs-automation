@@ -41,6 +41,7 @@ CREATE TABLE automations (
     field_options JSONB DEFAULT '[]'::jsonb,
     highlight_text TEXT NOT NULL,
     highlight_color VARCHAR(20) DEFAULT '#B89B5E4D',
+    uppercase BOOLEAN DEFAULT FALSE,
     position_start INTEGER,
     position_end INTEGER,
     created_at TIMESTAMPTZ DEFAULT NOW()

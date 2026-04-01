@@ -3,15 +3,37 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  static const Color primary = Color(0xFF1A3E5C);
-  static const Color accent = Color(0xFFB89B5E);
-  static const Color background = Color(0xFFF9F9F9);
+  // Premium Palette
+  static const Color primary = Color(0xFF0F172A); // Deep Navy
+  static const Color accent = Color(0xFFC5A059);  // Golden Bronze
+  static const Color highlight = Color(0x33C5A059);
+  
+  static const Color background = Color(0xFFF8FAFC);
   static const Color surface = Color(0xFFFFFFFF);
   static const Color onPrimary = Color(0xFFFFFFFF);
-  static const Color onSurface = Color(0xFF1A1A1A);
-  static const Color error = Color(0xFFD32F2F);
-  static const Color success = Color(0xFF2E7D32);
-  static const Color highlight = Color(0x4DB89B5E);
-  static const Color textSecondary = Color(0xFF6B7280);
-  static const Color border = Color(0xFFE5E7EB);
+  static const Color onSurface = Color(0xFF1E293B);
+  
+  static const Color error = Color(0xFFEF4444);
+  static const Color success = Color(0xFF10B981);
+  static const Color info = Color(0xFF3B82F6);
+  
+  static const Color textSecondary = Color(0xFF64748B);
+  static const Color border = Color(0xFFE2E8F0);
+  
+  // Custom Gradients
+  static const LinearGradient meshGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFF0F172A),
+      Color(0xFF1E293B),
+      Color(0xFF334155),
+    ],
+  );
+
+  // Dark Mode Palette
+  static const Color darkBackground = Color(0xFF020617);
+  static const Color darkSurface = Color(0xFF0F172A);
+  static const Color darkOnSurface = Color(0xFFF8FAFC);
+  static const Color darkBorder = Color(0xFF1E293B);
 }

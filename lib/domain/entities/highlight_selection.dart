@@ -8,6 +8,7 @@ class HighlightSelection {
   final String colorHex;
   final double opacity;
   final List<String> options;
+  final bool uppercase;
   final DateTime createdAt;
 
   const HighlightSelection({
@@ -20,6 +21,7 @@ class HighlightSelection {
     this.colorHex = '#B89B5E',
     this.opacity = 0.3,
     this.options = const [],
+    this.uppercase = false,
     required this.createdAt,
   });
 
@@ -33,6 +35,7 @@ class HighlightSelection {
     String? colorHex,
     double? opacity,
     List<String>? options,
+    bool? uppercase,
     DateTime? createdAt,
   }) {
     return HighlightSelection(
@@ -45,6 +48,7 @@ class HighlightSelection {
       colorHex: colorHex ?? this.colorHex,
       opacity: opacity ?? this.opacity,
       options: options ?? this.options,
+      uppercase: uppercase ?? this.uppercase,
       createdAt: createdAt ?? this.createdAt,
     );
   }

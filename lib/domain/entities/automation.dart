@@ -5,6 +5,7 @@ class Automation {
   final List<String> fieldOptions;
   final String highlightText;
   final String highlightColor;
+  final bool uppercase;
   final int? positionStart;
   final int? positionEnd;
   final DateTime createdAt;
@@ -16,6 +17,7 @@ class Automation {
     required this.fieldOptions,
     required this.highlightText,
     required this.highlightColor,
+    this.uppercase = false,
     this.positionStart,
     this.positionEnd,
     required this.createdAt,
