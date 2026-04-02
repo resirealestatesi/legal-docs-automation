@@ -43,6 +43,14 @@ class DocumentHighlighterScreen extends ConsumerStatefulWidget {
 class _DocumentHighlighterScreenState
     extends ConsumerState<DocumentHighlighterScreen> {
   String _documentText = '';
+
+  int _toDocxOffset(int screenOffset) {
+    if (screenOffset < 0) return 0;
+    final maxBounds = math.max(0, math.min(screenOffset, _textController.text.length));
+    final textBeforeOffset = _textController.text.substring(0, maxBounds);
+    final rCount = '\r'.allMatches(textBeforeOffset).length;
+    return maxBounds - rCount;
+  }
   String _fileName = 'Documento sin nombre';
   Uint8List? _fileBytes;
   final List<HighlightSelection> _highlights = [];
@@ -571,7 +579,9 @@ class _DocumentHighlighterScreenState
                                       if (text.trim().isNotEmpty) {
                                         print('DEBUG: Opening dialog...');
                                         try {
-                                          _showAssignDialog(text, safeStart, safeEnd);
+                                          final docxStart = _toDocxOffset(safeStart);
+                                          final docxEnd = _toDocxOffset(safeEnd);
+                                          _showAssignDialog(text, docxStart, docxEnd);
                                         } catch (e, stack) {
                                           print('DEBUG: Error showing dialog -> $e');
                                           print(stack);
@@ -639,6 +649,19 @@ class HighlightingTextController extends TextEditingController {
     notifyListeners();
   }
 
+  int _toScreenOffset(int docxOffset) {
+    if (docxOffset < 0) return 0;
+    int screenIdx = 0;
+    int docxIdx = 0;
+    while (docxIdx < docxOffset && screenIdx < text.length) {
+      if (text[screenIdx] != '\r') {
+        docxIdx++;
+      }
+      screenIdx++;
+    }
+    return screenIdx;
+  }
+
   @override
   TextSpan buildTextSpan({
     required BuildContext context,
@@ -660,18 +683,21 @@ class HighlightingTextController extends TextEditingController {
       ..sort((a, b) => a.startOffset.compareTo(b.startOffset));
 
     for (final highlight in sortedHighlights) {
-      if (highlight.startOffset < lastOffset) continue;
+      final screenStart = _toScreenOffset(highlight.startOffset);
+      final screenEnd = _toScreenOffset(highlight.endOffset);
 
-      if (highlight.startOffset > lastOffset) {
+      if (screenStart < lastOffset) continue;
+
+      if (screenStart > lastOffset) {
         final preText = text.substring(
           lastOffset,
-          highlight.startOffset.clamp(0, text.length),
+          screenStart.clamp(0, text.length),
         );
         spans.add(TextSpan(text: preText));
       }
 
-      final hEnd = highlight.endOffset.clamp(0, text.length);
-      final hStart = highlight.startOffset.clamp(0, text.length);
+      final hEnd = screenEnd.clamp(0, text.length);
+      final hStart = screenStart.clamp(0, text.length);
 
       if (hStart < hEnd) {
         final highlightedText = text.substring(hStart, hEnd);
